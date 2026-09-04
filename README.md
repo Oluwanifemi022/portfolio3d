@@ -1,8 +1,9 @@
 # 3D Portfolio
 
-A Streamlit app for showcasing a portfolio of 3D pieces: image, description,
-price, and an interactive (view-only) 3D model per item, with a
-password-protected admin page for uploads.
+A multi-page Streamlit site for showcasing 3D work: a Home page with a
+featured interactive piece, a Portfolio gallery (multiple images and 3D
+files per project, plus optional Spline/Sketchfab embeds), an About page,
+and a password-protected Admin page for uploads.
 
 ## Run it locally
 
@@ -10,70 +11,92 @@ password-protected admin page for uploads.
 pip install -r requirements.txt
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 # edit .streamlit/secrets.toml and set a real admin_password
-streamlit run app.py
+streamlit run Home.py
 ```
 
-Open the app, use the sidebar to go to **Admin**, log in, and add your first
-piece. It'll immediately show up on the main gallery page.
+Use the sidebar to navigate: **Home**, **Portfolio**, **About**, **Admin**.
+Log into Admin and add your first piece — it appears on the Portfolio page
+immediately.
 
-## Current state (Stage 1: local dev)
+## Structure
 
-- Metadata (title, description, price, file paths) is stored in a local
-  SQLite file at `data/portfolio.db`.
-- Uploaded images and 3D files are saved to `data/uploads/`.
-- 3D viewing: `.stl` files render via `streamlit-stl`. For `.obj` / `.fbx` /
-  `.glb` / `.gltf`, wire in `streamlit_extras.three_viewer` — swap the
-  `st.warning(...)` block in `app.py` for:
+```
+Home.py                 # landing page + featured embed
+pages/1_Portfolio.py    # gallery - the main deliverable
+pages/2_About.py        # placeholder copy, edit freely
+pages/3_Admin.py        # password-gated upload form
+utils/db.py             # SQLite: items, item_images, item_models
+utils/storage.py        # local file storage (swap for cloud pre-deploy)
+utils/theme.py          # shared fonts/colors/CSS
+utils/embeds.py         # Spline/Sketchfab iframe rendering
+utils/auth.py           # admin password gate
+```
 
-  ```python
-  from streamlit_extras.three_viewer import three_viewer
-  three_viewer(item["model_path"], height=400)
-  ```
+## Uploading multiple images/files
 
-  GLB is the recommended format for web viewing (smallest, fastest to load).
-  If you're exporting from Spline, GLB/GLTF is the native export target.
+The admin form's file uploaders accept multiple files in one go — click
+the uploader and select several, or drag a batch in. Each project can have
+any number of images and any number of 3D files.
+
+## Spline / Sketchfab embeds
+
+Each project can optionally carry an embed URL instead of (or alongside)
+an uploaded 3D file:
+
+- **Spline**: open your scene → Export → Code Export → copy the *Public
+  URL* (looks like `https://my.spline.design/xxxxxxxx/`).
+- **Sketchfab**: open the model page → Share/Embed → copy the *embed* URL
+  (looks like `https://sketchfab.com/models/xxxx/embed`).
+
+Paste it into the admin form's embed field and pick the matching provider.
+
+The Home page also has a featured embed slot — open `Home.py` and replace
+`FEATURED_EMBED_URL` near the top with your own scene's public URL.
+
+## Uploaded model file viewing
+
+`.stl` files render immediately via `streamlit-stl`. For `.obj` / `.fbx` /
+`.glb` / `.gltf` uploaded files (not embeds), wire in
+`streamlit_extras.three_viewer` — in `pages/1_Portfolio.py`, replace the
+`st.warning(...)` block with:
+
+```python
+from streamlit_extras.three_viewer import three_viewer
+three_viewer(model["path"], height=380)
+```
+
+GLB is the best format for web viewing generally — smallest and fastest.
 
 ## Before deploying: switch to cloud storage
 
-Streamlit Community Cloud's filesystem is **ephemeral** — anything written
-to local disk (your SQLite file and uploaded files) is wiped on every
-redeploy or restart. Before going live:
+Streamlit Community Cloud's filesystem is **ephemeral** — local files
+(your SQLite DB and uploaded files) are wiped on every redeploy/restart.
+Before going live:
 
 1. Create a free [Supabase](https://supabase.com) project (Postgres +
-   file storage in one).
-2. Replace the body of the functions in `utils/db.py` with calls to
-   Supabase's Postgres (or any Postgres) instead of `sqlite3`.
-3. Replace the body of `save_image` / `save_model` in `utils/storage.py`
-   with uploads to a Supabase Storage bucket, returning the bucket URL
-   instead of a local path.
-4. Add `supabase_url` and `supabase_key` to `secrets.toml`.
-
-Nothing else in the app needs to change — `app.py` and the admin page only
-call the functions in `utils/`, not the storage/DB implementation directly.
+   file storage).
+2. Rewrite the functions in `utils/db.py` to hit Postgres instead of
+   `sqlite3` (same function signatures — nothing else needs to change).
+3. Rewrite `save_image`/`save_model` in `utils/storage.py` to upload to a
+   Supabase Storage bucket and return the bucket URL instead of a local
+   path.
+4. Add `supabase_url` / `supabase_key` to `secrets.toml`.
 
 ## Deploying
 
-1. Push this repo to GitHub (`.streamlit/secrets.toml` is gitignored — never
-   commit it).
-2. Go to [share.streamlit.io](https://share.streamlit.io), connect your
-   GitHub account, and deploy this repo, pointing at `app.py`.
-3. In the app's settings on Streamlit Cloud, paste the contents of your
-   `secrets.toml` into the **Secrets** section.
-4. Every push to your GitHub repo auto-redeploys the app.
+1. Push this repo to GitHub (`.streamlit/secrets.toml` is gitignored —
+   never commit it).
+2. Go to [share.streamlit.io](https://share.streamlit.io), connect GitHub,
+   deploy this repo pointing at `Home.py` as the main file.
+3. In the app's Settings → Secrets, paste your `secrets.toml` contents.
+4. Every push to your GitHub repo auto-redeploys.
 
 ## A note on "view but not download"
 
-Any 3D file rendered in-browser is technically retrievable via the
-browser's dev tools/network tab — there's no way to make a file both
-interactively viewable in WebGL and fully unextractable. What you *can* do:
-
-- Serve models via short-lived signed URLs instead of permanent public
-  links (Supabase Storage supports this).
-- Disable right-click / dev-tools shortcuts (deters casual users, easily
-  bypassed by anyone determined).
-- Serve a decimated/low-poly preview version of the model instead of your
-  full-resolution source file.
-
-None of these are airtight. If true file protection is a hard requirement,
-that needs a different architecture (server-side rendering to a video/image
-stream) — worth a separate conversation if it matters to you.
+Any 3D file rendered in-browser is technically retrievable via dev
+tools/network tab — there's no way to make a file both interactively
+viewable in WebGL and fully unextractable. What helps (without being
+airtight): serving models via short-lived signed URLs instead of
+permanent public links, disabling right-click/dev-tools shortcuts
+(deters casual users only), or serving a decimated/low-poly preview
+instead of your full-resolution source file.
