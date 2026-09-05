@@ -9,7 +9,7 @@ dark = theme_toggle()
 # Paste the real embeddable URL here once you have it from Spline's
 # Export > Code Export panel (looks like https://my.spline.design/xxxx/).
 # The app.spline.design/community/... browsing link won't work here.
-BACKGROUND_EMBED_URL = "https://my.spline.design/replaceme-00000000000000000000000000000000/"
+BACKGROUND_EMBED_URL = "<iframe src='https://my.spline.design/genkubgreetingrobot-OAZ71uXekfp7swCgDp7ENqC1/' frameborder='0' width='100%' height='100%'></iframe>"
 BACKGROUND_EMBED_PROVIDER = "spline"
 
 inject_theme(dark, translucent=True)
